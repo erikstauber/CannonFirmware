@@ -9,6 +9,7 @@
 #include "CannonControl.h"
 #include "pid.h"
 #include "MathUtils.h"
+#include "uart.h"
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +39,7 @@ static PID motor_pid_;
 
 
 void CannonControlInit() {
+	UartBoot();
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(MotorControl_GPIO_Port, MotorControl_Pin, GPIO_PIN_SET);		// turn on the motor
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
@@ -48,7 +50,7 @@ void CannonControlInit() {
 	motor_pid_.SetMode(AUTOMATIC);
 }
 
-void CannonControlMain() {
+void CannonControlMain() {	// idle loop
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
 	HAL_Delay(500);
 	HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
@@ -70,7 +72,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {	// interrupt for once per revol
 
 }
 
-void CalculatePixel() {
+void CalculatePixel() {					// runs at each pixel
 	motor_params_.pixel_count+=1.0;
 	const double kNumBands=4.0;
 	double high_val=motor_params_.pixel_count_setpoint / kNumBands;
@@ -85,7 +87,7 @@ void CalculatePixel() {
 	__HAL_TIM_SET_AUTORELOAD(&htim6,  static_cast<uint16_t>(motor_params_.timer_reload_value));
 }
 
-void CalculateMotorFrequency() {
+void CalculateMotorFrequency() {	// runs at 100Hz
 	static uint32_t last_revolution_counter=revolution_counter_;
 	static uint32_t last_millis = HAL_GetTick();
 	uint32_t revs = revolution_counter_ - last_revolution_counter;
@@ -96,6 +98,11 @@ void CalculateMotorFrequency() {
 	last_millis=millis;
 	double period_per_rev = static_cast<double>(period_ms) / static_cast<double>(revs);
 	motor_frequency_ = MathUtilsIIRFilter(motor_frequency_, 1000.0 / static_cast<double>(period_per_rev), 0.1);
+	uint8_t buffer[256];
+
+//	uint32_t numbytes = sprintf((char*)buffer,"%f\n", motor_frequency_);
+//	uint32_t numbytes = UartDMARead(kUartCom, buffer, sizeof(buffer));
+//	if(numbytes>0) UartDMAWrite(kUartCom,buffer, numbytes);
 
 }
 
